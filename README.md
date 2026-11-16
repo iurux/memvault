@@ -34,7 +34,16 @@ memvault ui                                        # API on 127.0.0.1:8765
 cd ~/code/memvault-ui && bun run dev -- --port 4173   # UI
 ```
 
-Open http://localhost:4173. To keep it running in the background and start at login, see [docs/macos-autostart.md](docs/macos-autostart.md). To use it like an app: Chrome → ⋮ → Cast, save and share → Install page as app, or Safari → File → Add to Dock.
+Open http://localhost:4173.
+
+## Use it as an app
+
+1. **Start at login** so you never have to run the commands above: follow [docs/macos-autostart.md](docs/macos-autostart.md) (one copy-paste).
+2. **Add it to your Dock** with http://localhost:4173 open:
+   - Chrome: ⋮ → Cast, save and share → Install page as app
+   - Safari: File → Add to Dock
+
+It opens in its own window, shows up in Spotlight and Launchpad, and always shows your latest local data.
 
 ## Connect Claude Desktop
 
@@ -67,7 +76,9 @@ cd ~/code/memvault && git pull && pip install -e .
 cd ~/code/memvault-ui && git pull && bun install
 ```
 
-Then restart `memvault ui` (the UI dev server reloads by itself). Existing databases are migrated automatically.
+- **UI**: reloads by itself, just refresh the window.
+- **Backend**: restart it. If you set up autostart: `launchctl kickstart -k gui/$(id -u)/memvault.api`. Otherwise stop `memvault ui` with Ctrl+C and run it again.
+- Your database is upgraded automatically; nothing to migrate by hand.
 
 ## CLI
 
