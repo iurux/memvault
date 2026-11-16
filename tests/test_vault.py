@@ -136,3 +136,35 @@ def test_cli_import_and_search(tmp_path, capsys, monkeypatch):
     main(["--db", db, "search", "tomatoes"])
     out = capsys.readouterr().out
     assert "imported 1" in out and "Garden notes" in out
+
+
+def test_archive_hides_from_list_search_and_tags(vault):
+    a = conv("Bread", ("sourdough starter feeding", "twice a day"), tags=["baking"])
+    b = conv("Cake", ("chiffon cake recipe", "whip the whites"), tags=["baking"])
+    vault.save(a)
+    vault.save(b)
+    assert vault.archive(a.id)
+    assert [r["title"] for r in vault.list()] == ["Cake"]
+    assert [r["title"] for r in vault.list(archived="only")] == ["Bread"]
+    assert len(vault.list(archived="include")) == 2
+    assert "Bread" not in [h.title for h in vault.search("sourdough")]
+    assert vault.search("sourdough", include_archived=True)[0].title == "Bread"
+    assert vault.tag_counts() == [("baking", 1)]
+    assert vault.get(a.id).archived_at
+    vault.save(a)  # re-import keeps it archived
+    assert vault.get(a.id).archived_at
+    assert vault.archive(a.id, False) and len(vault.list()) == 2
+
+
+def test_migrates_old_vault(tmp_path):
+    import sqlite3
+    p = tmp_path / "old.db"
+    c = sqlite3.connect(p)
+    c.execute("CREATE TABLE conversations (id TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', "
+              "source TEXT NOT NULL DEFAULT 'manual', tags TEXT NOT NULL DEFAULT '', "
+              "created_at TEXT NOT NULL, saved_at TEXT NOT NULL)")
+    c.execute("INSERT INTO conversations VALUES ('x','old','manual','','2026-01-01','2026-01-01')")
+    c.commit()
+    c.close()
+    v = Vault(p)
+    assert v.list()[0]["title"] == "old" and v.archive("x")

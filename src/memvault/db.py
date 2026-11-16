@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     source      TEXT NOT NULL DEFAULT 'manual',   -- manual | claude | chatgpt | mcp | chat
     tags        TEXT NOT NULL DEFAULT '',         -- comma separated
     created_at  TEXT NOT NULL,
-    saved_at    TEXT NOT NULL
+    saved_at    TEXT NOT NULL,
+    archived_at TEXT                              -- NULL = active
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -61,4 +62,12 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     conn = sqlite3.connect(str(p), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(conversations)")}
+    if "archived_at" not in cols:  # vaults created before v0.2
+        conn.execute("ALTER TABLE conversations ADD COLUMN archived_at TEXT")
+        conn.commit()

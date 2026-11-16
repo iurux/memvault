@@ -74,6 +74,7 @@ def get_conversation(conversation_id: str) -> dict:
         "title": c.title,
         "tags": c.tags,
         "created_at": c.created_at,
+        "archived": c.archived_at is not None,
         "messages": [{"role": m.role, "content": m.content} for m in c.messages],
     }
 

@@ -37,6 +37,8 @@ def _summary(row) -> dict:
         "source": row["source"],
         "tags": _tags(row["tags"]),
         "created_at": row["created_at"],
+        "archived": row["archived_at"] is not None,
+        "archived_at": row["archived_at"],
         "snippet": (row["snippet"] or "").strip(),
     }
 
@@ -62,7 +64,10 @@ def create_app(
 
     async def list_conversations(request: Request):
         q = request.query_params
-        rows = vault.list(limit=_int(q.get("limit"), 200, hi=5000), tag=q.get("tag"), source=q.get("source"))
+        archived = {"true": "only", "all": "include"}.get((q.get("archived") or "").lower(), "exclude")
+        rows = vault.list(
+            limit=_int(q.get("limit"), 200, hi=5000), tag=q.get("tag"), source=q.get("source"), archived=archived
+        )
         return JSONResponse([_summary(r) for r in rows])
 
     async def get_conversation(request: Request):
@@ -76,6 +81,8 @@ def create_app(
                 "source": c.source,
                 "tags": c.tags,
                 "created_at": c.created_at,
+                "archived": c.archived_at is not None,
+                "archived_at": c.archived_at,
                 "messages": [{"role": m.role, "content": m.content, "created_at": m.created_at} for m in c.messages],
             }
         )
@@ -85,13 +92,18 @@ def create_app(
             body = await request.json()
         except ValueError:
             return _err(400, "invalid JSON")
-        title, tags = body.get("title"), body.get("tags")
+        title, tags, archived = body.get("title"), body.get("tags"), body.get("archived")
+        if archived is not None and not isinstance(archived, bool):
+            return _err(400, "archived must be a boolean")
         if title is not None and not isinstance(title, str):
             return _err(400, "title must be a string")
         if tags is not None and not (isinstance(tags, list) and all(isinstance(t, str) for t in tags)):
             return _err(400, "tags must be a list of strings")
-        if not vault.update(request.path_params["id"], title=title, tags=tags):
+        cid = request.path_params["id"]
+        if not vault.update(cid, title=title, tags=tags):
             return _err(404, "not found")
+        if archived is not None:
+            vault.archive(cid, archived)
         return await get_conversation(request)
 
     async def delete_conversation(request: Request):
@@ -103,7 +115,8 @@ def create_app(
         q = request.query_params.get("q", "").strip()
         if not q:
             return JSONResponse([])
-        hits = vault.search(q, k=_int(request.query_params.get("k"), 20, hi=100))
+        include = request.query_params.get("include_archived", "").lower() in ("1", "true")
+        hits = vault.search(q, k=_int(request.query_params.get("k"), 20, hi=100), include_archived=include)
         return JSONResponse(
             [
                 {"conversation_id": h.conversation_id, "title": h.title, "snippet": h.snippet, "score": h.score}

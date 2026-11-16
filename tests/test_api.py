@@ -68,3 +68,15 @@ def test_cors_lovable_and_localhost(client):
 def test_static_spa_fallback(client):
     assert client.get("/").text == "<html>ui</html>"
     assert client.get("/c/c1").text == "<html>ui</html>"
+
+
+def test_archive_flow(client):
+    r = client.patch("/api/conversations/c2", json={"archived": True})
+    assert r.status_code == 200 and r.json()["archived"] is True
+    assert [c["id"] for c in client.get("/api/conversations").json()] == ["c1"]
+    assert [c["id"] for c in client.get("/api/conversations?archived=true").json()] == ["c2"]
+    assert len(client.get("/api/conversations?archived=all").json()) == 2
+    assert client.get("/api/search", params={"q": "congestion"}).json() == []
+    assert client.get("/api/search", params={"q": "congestion", "include_archived": "true"}).json()
+    assert client.patch("/api/conversations/c2", json={"archived": "yes"}).status_code == 400
+    assert client.patch("/api/conversations/c2", json={"archived": False}).json()["archived"] is False

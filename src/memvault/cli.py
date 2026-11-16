@@ -41,8 +41,10 @@ def cmd_search(args) -> None:
 
 
 def cmd_list(args) -> None:
-    for r in _vault(args).list(limit=args.limit, tag=args.tag, source=args.source):
-        print(f"{r['created_at'][:10]}  {r['source']:<8} {r['id']:<44} {r['title']}")
+    mode = "only" if args.archived else ("include" if args.all else "exclude")
+    for r in _vault(args).list(limit=args.limit, tag=args.tag, source=args.source, archived=mode):
+        flag = " [archived]" if r["archived_at"] else ""
+        print(f"{r['created_at'][:10]}  {r['source']:<8} {r['id']:<44} {r['title']}{flag}")
 
 
 def cmd_show(args) -> None:
@@ -52,6 +54,13 @@ def cmd_show(args) -> None:
     print(f"# {c.title}\n")
     for m in c.messages:
         print(f"**{m.role}**: {m.content}\n")
+
+
+def cmd_archive(args) -> None:
+    v = _vault(args)
+    results = [v.archive(i, not args.undo) for i in args.ids]  # apply to every id, no short-circuit
+    ok = all(results)
+    print(("unarchived" if args.undo else "archived") if ok else "some ids not found")
 
 
 def cmd_delete(args) -> None:
@@ -107,13 +116,20 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--limit", type=int, default=30)
     s.add_argument("--tag")
     s.add_argument("--source")
+    s.add_argument("--archived", action="store_true", help="show archived only")
+    s.add_argument("--all", action="store_true", help="include archived")
     s.set_defaults(fn=cmd_list)
+
+    s = sub.add_parser("archive", help="archive conversations (hidden from list and search, not deleted)")
+    s.add_argument("ids", nargs="+")
+    s.add_argument("--undo", action="store_true", help="unarchive instead")
+    s.set_defaults(fn=cmd_archive)
 
     s = sub.add_parser("show", help="print a conversation as markdown")
     s.add_argument("id")
     s.set_defaults(fn=cmd_show)
 
-    s = sub.add_parser("delete", help="delete a conversation")
+    s = sub.add_parser("delete", help="permanently delete a conversation")
     s.add_argument("id")
     s.set_defaults(fn=cmd_delete)
 

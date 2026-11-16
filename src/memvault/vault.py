@@ -35,6 +35,7 @@ class Conversation:
     tags: list[str] = field(default_factory=list)
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
     created_at: str = field(default_factory=_now)
+    archived_at: str | None = None
 
 
 @dataclass
@@ -76,14 +77,17 @@ class Vault:
     # ---- write -----------------------------------------------------------
     def save(self, conv: Conversation, replace: bool = True) -> str:
         c = self.conn
-        exists = c.execute("SELECT 1 FROM conversations WHERE id=?", (conv.id,)).fetchone()
+        exists = c.execute("SELECT archived_at FROM conversations WHERE id=?", (conv.id,)).fetchone()
         if exists and not replace:
             return conv.id
+        # re-importing a conversation keeps it archived if it was archived
+        archived_at = conv.archived_at or (exists["archived_at"] if exists else None)
         with c:
             c.execute("DELETE FROM conversations WHERE id=?", (conv.id,))
             c.execute(
-                "INSERT INTO conversations(id,title,source,tags,created_at,saved_at) VALUES (?,?,?,?,?,?)",
-                (conv.id, conv.title, conv.source, ",".join(conv.tags), conv.created_at, _now()),
+                "INSERT INTO conversations(id,title,source,tags,created_at,saved_at,archived_at) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (conv.id, conv.title, conv.source, ",".join(conv.tags), conv.created_at, _now(), archived_at),
             )
             c.executemany(
                 "INSERT INTO messages(conversation_id,position,role,content,created_at) VALUES (?,?,?,?,?)",
@@ -108,6 +112,14 @@ class Vault:
             cur = self.conn.execute("DELETE FROM conversations WHERE id=?", (conversation_id,))
         return cur.rowcount > 0
 
+    def archive(self, conversation_id: str, archived: bool = True) -> bool:
+        with self.conn:
+            cur = self.conn.execute(
+                "UPDATE conversations SET archived_at=? WHERE id=?",
+                (_now() if archived else None, conversation_id),
+            )
+        return cur.rowcount > 0
+
     def tag(self, conversation_id: str, tags: list[str]) -> None:
         self.update(conversation_id, tags=tags)
 
@@ -127,7 +139,7 @@ class Vault:
 
     def tag_counts(self) -> list[tuple[str, int]]:
         counts: dict[str, int] = {}
-        for (tags,) in self.conn.execute("SELECT tags FROM conversations"):
+        for (tags,) in self.conn.execute("SELECT tags FROM conversations WHERE archived_at IS NULL"):
             for t in tags.split(","):
                 if t:
                     counts[t] = counts.get(t, 0) + 1
@@ -158,15 +170,27 @@ class Vault:
             tags=[t for t in row["tags"].split(",") if t],
             id=row["id"],
             created_at=row["created_at"],
+            archived_at=row["archived_at"],
         )
 
-    def list(self, limit: int = 50, tag: str | None = None, source: str | None = None) -> list[sqlite3.Row]:
+    def list(
+        self,
+        limit: int = 50,
+        tag: str | None = None,
+        source: str | None = None,
+        archived: str = "exclude",
+    ) -> list[sqlite3.Row]:
+        """archived: "exclude" (default, active only) | "only" | "include"."""
         sql = (
-            "SELECT id,title,source,tags,created_at,"
+            "SELECT id,title,source,tags,created_at,archived_at,"
             "(SELECT substr(content,1,200) FROM messages m WHERE m.conversation_id=conversations.id "
             "ORDER BY position LIMIT 1) AS snippet FROM conversations WHERE 1=1"
         )
         args: list = []
+        if archived == "exclude":
+            sql += " AND archived_at IS NULL"
+        elif archived == "only":
+            sql += " AND archived_at IS NOT NULL"
         if tag:
             sql += " AND (','||tags||',') LIKE ?"
             args.append(f"%,{tag},%")
@@ -177,7 +201,7 @@ class Vault:
         args.append(limit)
         return self.conn.execute(sql, args).fetchall()
 
-    def search(self, query: str, k: int = 5) -> list[Hit]:
+    def search(self, query: str, k: int = 5, include_archived: bool = False) -> list[Hit]:
         """Hybrid search: BM25 full-text + cosine similarity, merged with reciprocal rank fusion."""
         ranks: dict[int, float] = {}
 
@@ -216,10 +240,12 @@ class Vault:
         best: dict[str, Hit] = {}
         for chunk_id, score in sorted(ranks.items(), key=lambda x: -x[1]):
             row = self.conn.execute(
-                "SELECT c.conversation_id, c.text, v.title FROM chunks c "
+                "SELECT c.conversation_id, c.text, v.title, v.archived_at FROM chunks c "
                 "JOIN conversations v ON v.id=c.conversation_id WHERE c.id=?",
                 (chunk_id,),
             ).fetchone()
+            if row and row["archived_at"] and not include_archived:
+                continue
             if row and row["conversation_id"] not in best:
                 best[row["conversation_id"]] = Hit(row["conversation_id"], row["title"], row["text"][:400], score)
             if len(best) >= k:
