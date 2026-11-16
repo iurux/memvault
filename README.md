@@ -5,7 +5,7 @@ Save the AI conversations you care about into a local SQLite database, then brow
 - **Save from Claude Desktop** via MCP: "save this to memvault, tag it recipes"
 - **Import** your Claude or ChatGPT history exports
 - **Search** by keyword or meaning (works with Chinese/Japanese too)
-- **Web UI** ([memvault-ui](https://github.com/iurux/memvault-ui)) to browse, edit, tag, archive and delete
+- **Web UI** ([memvault-ui](https://github.com/iurux/memvault-ui)) to browse, edit, star, tag, archive and delete
 
 ## Install
 
@@ -57,7 +57,7 @@ Find the full path with `which memvault`, then add to `claude_desktop_config.jso
 }
 ```
 
-Now you can say "save this conversation to memvault" or "search my vault for …".
+Now you can say "save this conversation to memvault", "search my vault for …", "add today's update to my groceries note" or "star that note".
 
 ## Import history
 
@@ -85,7 +85,8 @@ cd ~/code/memvault-ui && git pull && bun install
 ```bash
 memvault search "sourdough"        memvault list [--tag x] [--archived]
 memvault show <id>                 memvault archive <id> [--undo]
-memvault delete <id>               memvault reembed   # after changing embedding model
+memvault star <id> [--undo]       memvault delete <id>
+memvault reembed                   # after changing embedding model
 ```
 
 ## Your data

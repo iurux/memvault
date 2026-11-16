@@ -36,6 +36,7 @@ class Conversation:
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
     created_at: str = field(default_factory=_now)
     archived_at: str | None = None
+    starred_at: str | None = None
 
 
 @dataclass
@@ -77,17 +78,21 @@ class Vault:
     # ---- write -----------------------------------------------------------
     def save(self, conv: Conversation, replace: bool = True) -> str:
         c = self.conn
-        exists = c.execute("SELECT archived_at FROM conversations WHERE id=?", (conv.id,)).fetchone()
+        exists = c.execute("SELECT archived_at, starred_at FROM conversations WHERE id=?", (conv.id,)).fetchone()
         if exists and not replace:
             return conv.id
         # re-importing a conversation keeps it archived if it was archived
         archived_at = conv.archived_at or (exists["archived_at"] if exists else None)
+        starred_at = conv.starred_at or (exists["starred_at"] if exists else None)
         with c:
             c.execute("DELETE FROM conversations WHERE id=?", (conv.id,))
             c.execute(
-                "INSERT INTO conversations(id,title,source,tags,created_at,saved_at,archived_at) "
-                "VALUES (?,?,?,?,?,?,?)",
-                (conv.id, conv.title, conv.source, ",".join(conv.tags), conv.created_at, _now(), archived_at),
+                "INSERT INTO conversations(id,title,source,tags,created_at,saved_at,archived_at,starred_at) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                (
+                    conv.id, conv.title, conv.source, ",".join(conv.tags),
+                    conv.created_at, _now(), archived_at, starred_at,
+                ),
             )
             c.executemany(
                 "INSERT INTO messages(conversation_id,position,role,content,created_at) VALUES (?,?,?,?,?)",
@@ -120,6 +125,14 @@ class Vault:
         conv.messages = messages
         self.save(conv)
         return True
+
+    def star(self, conversation_id: str, starred: bool = True) -> bool:
+        with self.conn:
+            cur = self.conn.execute(
+                "UPDATE conversations SET starred_at=? WHERE id=?",
+                (_now() if starred else None, conversation_id),
+            )
+        return cur.rowcount > 0
 
     def archive(self, conversation_id: str, archived: bool = True) -> bool:
         with self.conn:
@@ -180,6 +193,7 @@ class Vault:
             id=row["id"],
             created_at=row["created_at"],
             archived_at=row["archived_at"],
+            starred_at=row["starred_at"],
         )
 
     def list(
@@ -188,10 +202,11 @@ class Vault:
         tag: str | None = None,
         source: str | None = None,
         archived: str = "exclude",
+        starred_only: bool = False,
     ) -> list[sqlite3.Row]:
         """archived: "exclude" (default, active only) | "only" | "include"."""
         sql = (
-            "SELECT id,title,source,tags,created_at,archived_at,"
+            "SELECT id,title,source,tags,created_at,archived_at,starred_at,"
             "(SELECT substr(content,1,200) FROM messages m WHERE m.conversation_id=conversations.id "
             "ORDER BY position LIMIT 1) AS snippet FROM conversations WHERE 1=1"
         )
@@ -200,13 +215,16 @@ class Vault:
             sql += " AND archived_at IS NULL"
         elif archived == "only":
             sql += " AND archived_at IS NOT NULL"
+        if starred_only:
+            sql += " AND starred_at IS NOT NULL"
         if tag:
             sql += " AND (','||tags||',') LIKE ?"
             args.append(f"%,{tag},%")
         if source:
             sql += " AND source=?"
             args.append(source)
-        sql += " ORDER BY created_at DESC LIMIT ?"
+        # starred first (most recently starred on top), then newest
+        sql += " ORDER BY starred_at IS NULL, starred_at DESC, created_at DESC LIMIT ?"
         args.append(limit)
         return self.conn.execute(sql, args).fetchall()
 

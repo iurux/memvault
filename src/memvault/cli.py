@@ -43,7 +43,7 @@ def cmd_search(args) -> None:
 def cmd_list(args) -> None:
     mode = "only" if args.archived else ("include" if args.all else "exclude")
     for r in _vault(args).list(limit=args.limit, tag=args.tag, source=args.source, archived=mode):
-        flag = " [archived]" if r["archived_at"] else ""
+        flag = (" ★" if r["starred_at"] else "") + (" [archived]" if r["archived_at"] else "")
         print(f"{r['created_at'][:10]}  {r['source']:<8} {r['id']:<44} {r['title']}{flag}")
 
 
@@ -61,6 +61,12 @@ def cmd_archive(args) -> None:
     results = [v.archive(i, not args.undo) for i in args.ids]  # apply to every id, no short-circuit
     ok = all(results)
     print(("unarchived" if args.undo else "archived") if ok else "some ids not found")
+
+
+def cmd_star(args) -> None:
+    v = _vault(args)
+    results = [v.star(i, not args.undo) for i in args.ids]
+    print(("unstarred" if args.undo else "starred") if all(results) else "some ids not found")
 
 
 def cmd_delete(args) -> None:
@@ -128,6 +134,11 @@ def main(argv: list[str] | None = None) -> None:
     s = sub.add_parser("show", help="print a conversation as markdown")
     s.add_argument("id")
     s.set_defaults(fn=cmd_show)
+
+    s = sub.add_parser("star", help="star conversations (pinned to the top)")
+    s.add_argument("ids", nargs="+")
+    s.add_argument("--undo", action="store_true", help="unstar instead")
+    s.set_defaults(fn=cmd_star)
 
     s = sub.add_parser("delete", help="permanently delete a conversation")
     s.add_argument("id")

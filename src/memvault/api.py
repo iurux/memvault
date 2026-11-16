@@ -38,6 +38,8 @@ def _summary(row) -> dict:
         "created_at": row["created_at"],
         "archived": row["archived_at"] is not None,
         "archived_at": row["archived_at"],
+        "starred": row["starred_at"] is not None,
+        "starred_at": row["starred_at"],
         "snippet": (row["snippet"] or "").strip(),
     }
 
@@ -65,7 +67,11 @@ def create_app(
         q = request.query_params
         archived = {"true": "only", "all": "include"}.get((q.get("archived") or "").lower(), "exclude")
         rows = vault.list(
-            limit=_int(q.get("limit"), 200, hi=5000), tag=q.get("tag"), source=q.get("source"), archived=archived
+            limit=_int(q.get("limit"), 200, hi=5000),
+            tag=q.get("tag"),
+            source=q.get("source"),
+            archived=archived,
+            starred_only=(q.get("starred") or "").lower() == "true",
         )
         return JSONResponse([_summary(r) for r in rows])
 
@@ -82,6 +88,8 @@ def create_app(
                 "created_at": c.created_at,
                 "archived": c.archived_at is not None,
                 "archived_at": c.archived_at,
+                "starred": c.starred_at is not None,
+                "starred_at": c.starred_at,
                 "messages": [{"role": m.role, "content": m.content, "created_at": m.created_at} for m in c.messages],
             }
         )
@@ -99,8 +107,10 @@ def create_app(
         )
         if messages is not None and not valid_messages:
             return _err(400, "messages must be a list of {role, content} strings")
-        if archived is not None and not isinstance(archived, bool):
-            return _err(400, "archived must be a boolean")
+        starred = body.get("starred")
+        for name, val in (("archived", archived), ("starred", starred)):
+            if val is not None and not isinstance(val, bool):
+                return _err(400, f"{name} must be a boolean")
         if title is not None and not isinstance(title, str):
             return _err(400, "title must be a string")
         if tags is not None and not (isinstance(tags, list) and all(isinstance(t, str) for t in tags)):
@@ -110,6 +120,8 @@ def create_app(
             return _err(404, "not found")
         if archived is not None:
             vault.archive(cid, archived)
+        if starred is not None:
+            vault.star(cid, starred)
         if messages is not None:
             vault.set_messages(
                 cid, [Message(m["role"], m["content"], m.get("created_at")) for m in messages if m["content"].strip()]

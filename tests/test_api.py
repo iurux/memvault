@@ -10,9 +10,10 @@ def client(tmp_path):
     v = Vault(tmp_path / "api.db")
     v.save(Conversation(
         messages=[Message("user", "番茄炒蛋 recipe sourdough"), Message("assistant", "先炒蛋再炒番茄")],
-        title="Cooking", tags=["food", "recipes"], id="c1",
+        title="Cooking", tags=["food", "recipes"], id="c1", created_at="2026-01-01T00:00:00+00:00",
     ))
-    v.save(Conversation(messages=[Message("user", "TCP congestion control")], title="Networking", tags=["cs"], id="c2"))
+    v.save(Conversation(messages=[Message("user", "TCP congestion control")], title="Networking", tags=["cs"], id="c2",
+                                created_at="2026-01-02T00:00:00+00:00"))
     (tmp_path / "dist").mkdir()
     (tmp_path / "dist" / "index.html").write_text("<html>ui</html>")
     return TestClient(create_app(v, static_dir=tmp_path / "dist"))
@@ -101,3 +102,17 @@ def test_edit_keeps_archived(client):
     client.patch("/api/conversations/c1", json={"archived": True})
     r = client.patch("/api/conversations/c1", json={"messages": [{"role": "user", "content": "edited"}]})
     assert r.json()["archived"] is True
+
+
+def test_star_pins_to_top(client):
+    assert client.get("/api/conversations").json()[0]["id"] == "c2"  # newest first
+    r = client.patch("/api/conversations/c1", json={"starred": True})
+    assert r.json()["starred"] is True
+    rows = client.get("/api/conversations").json()
+    assert rows[0]["id"] == "c1" and rows[0]["starred"] is True
+    assert [c["id"] for c in client.get("/api/conversations?starred=true").json()] == ["c1"]
+    client.patch("/api/conversations/c1", json={"messages": [{"role": "user", "content": "x"}]})
+    assert client.get("/api/conversations/c1").json()["starred"] is True  # edits keep the star
+    assert client.patch("/api/conversations/c1", json={"starred": 1}).status_code == 400
+    client.patch("/api/conversations/c1", json={"starred": False})
+    assert client.get("/api/conversations").json()[0]["id"] == "c2"

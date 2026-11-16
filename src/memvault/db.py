@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     tags        TEXT NOT NULL DEFAULT '',         -- comma separated
     created_at  TEXT NOT NULL,
     saved_at    TEXT NOT NULL,
-    archived_at TEXT                              -- NULL = active
+    archived_at TEXT,                             -- NULL = active
+    starred_at  TEXT                              -- NULL = not starred
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -67,7 +68,9 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
+    """Add columns introduced after a vault was created."""
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(conversations)")}
-    if "archived_at" not in cols:  # vaults created before v0.2
-        conn.execute("ALTER TABLE conversations ADD COLUMN archived_at TEXT")
-        conn.commit()
+    for col in ("archived_at", "starred_at"):
+        if col not in cols:
+            conn.execute(f"ALTER TABLE conversations ADD COLUMN {col} TEXT")
+    conn.commit()
