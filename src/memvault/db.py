@@ -57,7 +57,8 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     p = Path(path).expanduser() if path else default_db_path()
     if str(p) != ":memory:":
         p.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(p))
+    # async servers create the vault in one thread and use it from the event loop thread
+    conn = sqlite3.connect(str(p), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
     return conn

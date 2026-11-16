@@ -109,8 +109,29 @@ class Vault:
         return cur.rowcount > 0
 
     def tag(self, conversation_id: str, tags: list[str]) -> None:
+        self.update(conversation_id, tags=tags)
+
+    def update(self, conversation_id: str, title: str | None = None, tags: list[str] | None = None) -> bool:
+        sets, args = [], []
+        if title is not None:
+            sets.append("title=?")
+            args.append(title)
+        if tags is not None:
+            sets.append("tags=?")
+            args.append(",".join(t.strip() for t in tags if t.strip()))
+        if not sets:
+            return self.conn.execute("SELECT 1 FROM conversations WHERE id=?", (conversation_id,)).fetchone() is not None
         with self.conn:
-            self.conn.execute("UPDATE conversations SET tags=? WHERE id=?", (",".join(tags), conversation_id))
+            cur = self.conn.execute(f"UPDATE conversations SET {', '.join(sets)} WHERE id=?", (*args, conversation_id))
+        return cur.rowcount > 0
+
+    def tag_counts(self) -> list[tuple[str, int]]:
+        counts: dict[str, int] = {}
+        for (tags,) in self.conn.execute("SELECT tags FROM conversations"):
+            for t in tags.split(","):
+                if t:
+                    counts[t] = counts.get(t, 0) + 1
+        return sorted(counts.items(), key=lambda x: (-x[1], x[0]))
 
     def _embed(self, texts: list[str]) -> np.ndarray | None:
         if not self.embedder or not texts:
@@ -140,7 +161,11 @@ class Vault:
         )
 
     def list(self, limit: int = 50, tag: str | None = None, source: str | None = None) -> list[sqlite3.Row]:
-        sql = "SELECT id,title,source,tags,created_at FROM conversations WHERE 1=1"
+        sql = (
+            "SELECT id,title,source,tags,created_at,"
+            "(SELECT substr(content,1,200) FROM messages m WHERE m.conversation_id=conversations.id "
+            "ORDER BY position LIMIT 1) AS snippet FROM conversations WHERE 1=1"
+        )
         args: list = []
         if tag:
             sql += " AND (','||tags||',') LIKE ?"

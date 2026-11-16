@@ -50,6 +50,28 @@ Tools exposed: `save_conversation`, `save_note`, `search_memory`, `get_conversat
 
 Then just talk: *"save this conversation to memvault, tag it opt"* or *"search my vault for the Spokane biometrics plan"*.
 
+## Web UI
+
+`memvault ui` starts a local REST API on `http://127.0.0.1:8765` (localhost only, never exposed to the network).
+
+```bash
+memvault ui                                   # API only; point your frontend at it
+memvault ui --static ../memvault-ui/dist      # also serve a built frontend at http://127.0.0.1:8765
+```
+
+| method | path | |
+|---|---|---|
+| GET | `/api/health` | status and embedding model |
+| GET | `/api/conversations?limit=&tag=&source=` | list with snippets |
+| GET | `/api/conversations/{id}` | full conversation |
+| PATCH | `/api/conversations/{id}` | `{title?, tags?}` |
+| DELETE | `/api/conversations/{id}` | |
+| GET | `/api/search?q=&k=` | hybrid search |
+| GET | `/api/tags` | `[{tag, count}]` |
+| POST | `/api/notes` | `{title, content, tags}` |
+
+CORS allows `localhost:5173`/`8080` (Vite dev servers) and Lovable preview domains. Add others with `--origin https://example.com` or `MEMVAULT_CORS_ORIGINS`.
+
 ## CLI
 
 ```bash
@@ -94,6 +116,7 @@ ruff check .
 ## Roadmap
 
 - [ ] `sqlite-vec` index for large vaults (current brute-force cosine is fine to ~100k chunks)
+- [x] Local REST API for a web UI
 - [ ] Web UI (browse, tag, edit)
 - [ ] Auto-summaries and topic clustering
 - [ ] Encrypted vault option

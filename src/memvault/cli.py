@@ -73,6 +73,12 @@ def cmd_serve(args) -> None:
     main()
 
 
+def cmd_ui(args) -> None:
+    from .api import serve
+
+    serve(_vault(args), host=args.host, port=args.port, static_dir=args.static, origins=args.origin)
+
+
 def cmd_chat(args) -> None:
     from .chat import run
 
@@ -116,6 +122,13 @@ def main(argv: list[str] | None = None) -> None:
 
     s = sub.add_parser("serve", help="run the MCP server over stdio")
     s.set_defaults(fn=cmd_serve)
+
+    s = sub.add_parser("ui", help="run the local REST API for the web UI")
+    s.add_argument("--port", type=int, default=8765)
+    s.add_argument("--host", default="127.0.0.1")
+    s.add_argument("--static", help="also serve a built frontend (e.g. ../memvault-ui/dist)")
+    s.add_argument("--origin", action="append", help="extra allowed CORS origin (repeatable)")
+    s.set_defaults(fn=cmd_ui)
 
     s = sub.add_parser("chat", help="terminal chat with a local model + vault retrieval")
     s.add_argument("--model")
