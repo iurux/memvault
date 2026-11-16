@@ -17,10 +17,9 @@ from starlette.staticfiles import StaticFiles
 from .vault import Conversation, Message, Vault
 
 DEFAULT_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:8080",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:8080",
+    f"http://{host}:{port}"
+    for host in ("localhost", "127.0.0.1")
+    for port in (4173, 5173, 8080)  # memvault-ui, Vite defaults
 ]
 # Lovable previews and deployments
 DEFAULT_ORIGIN_REGEX = r"https://([a-z0-9-]+\.)*(lovable\.app|lovable\.dev|lovableproject\.com)"

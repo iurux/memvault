@@ -1,126 +1,90 @@
 # memvault
 
-Save the AI conversations you actually care about into a **local SQLite vault**, then search them by keyword or meaning. Your data never leaves your machine.
+Save the AI conversations you care about into a local SQLite database, then browse and search them. Nothing leaves your machine.
 
-- 🔌 **MCP server**: say "save this" in Claude Desktop (or any MCP client) and it lands in your vault; ask "what did we figure out about X?" and it searches it
-- 📥 **Importers** for official Claude and ChatGPT `conversations.json` exports
-- 🔎 **Hybrid search**: SQLite FTS5 (trigram, works for Chinese/Japanese) + local embeddings, merged with reciprocal rank fusion
-- 💬 **Local chat** against Ollama (or any OpenAI-compatible endpoint) with retrieval from the vault
-- 🪶 One file database, three dependencies, no server to run
-
-```
-┌──────────────┐   MCP (stdio)   ┌──────────────────────────────────┐
-│Claude Desktop│ ──────────────▶ │ memvault                         │
-└──────────────┘                 │  save / search / get / list      │
-┌──────────────┐                 │                                  │
-│ memvault chat│ ──────────────▶ │  SQLite: conversations, messages │
-│  (Ollama)    │                 │          chunks + FTS5 + vectors │
-└──────────────┘                 └──────────────┬───────────────────┘
-  exports ──▶ memvault import                   │ embeddings (optional)
-                                                ▼
-                                          Ollama /api/embed
-```
+- **Save from Claude Desktop** via MCP: "save this to memvault, tag it recipes"
+- **Import** your Claude or ChatGPT history exports
+- **Search** by keyword or meaning (works with Chinese/Japanese too)
+- **Web UI** ([memvault-ui](https://github.com/iurux/memvault-ui)) to browse, tag, archive and delete
 
 ## Install
 
-```bash
-git clone https://github.com/<you>/memvault && cd memvault
-pip install -e .
+Requires Python 3.10+ and [Bun](https://bun.sh) (or Node 20+).
 
-# optional, for semantic search and local chat
-ollama pull nomic-embed-text
-ollama pull qwen3:8b
+```bash
+mkdir -p ~/code && cd ~/code
+
+# backend
+git clone https://github.com/iurux/memvault.git
+pip install -e ./memvault
+
+# frontend
+git clone https://github.com/iurux/memvault-ui.git
+cd memvault-ui && bun install
 ```
 
-Without Ollama everything still works with keyword search only.
+Optional, for semantic search: install [Ollama](https://ollama.com) and run `ollama pull nomic-embed-text`. Without it, search is keyword only.
 
-## Use it from Claude Desktop
+## Run
 
-Add this to `claude_desktop_config.json` (see [`examples/`](examples/claude_desktop_config.json)) and restart:
+Two processes, in two terminals:
+
+```bash
+memvault ui                                        # API on 127.0.0.1:8765
+cd ~/code/memvault-ui && bun run dev -- --port 4173   # UI
+```
+
+Open http://localhost:4173. To keep it running in the background and start at login, see [docs/macos-autostart.md](docs/macos-autostart.md). To use it like an app: Chrome → ⋮ → Cast, save and share → Install page as app, or Safari → File → Add to Dock.
+
+## Connect Claude Desktop
+
+Find the full path with `which memvault`, then add to `claude_desktop_config.json` (Settings → Developer → Edit Config) and restart Claude:
 
 ```json
 {
   "mcpServers": {
-    "memvault": { "command": "memvault", "args": ["serve"] }
+    "memvault": { "command": "/full/path/to/memvault", "args": ["serve"] }
   }
 }
 ```
 
-Tools exposed: `save_conversation`, `save_note`, `search_memory`, `get_conversation`, `list_conversations`.
+Now you can say "save this conversation to memvault" or "search my vault for …".
 
-Then just talk: *"save this conversation to memvault, tag it recipes"* or *"search my vault for that sourdough discussion"*.
+## Import history
 
-## Web UI
-
-`memvault ui` starts a local REST API on `http://127.0.0.1:8765` (localhost only, never exposed to the network).
+Export from claude.ai (Settings → Privacy → Export data) or ChatGPT (Settings → Data controls → Export), then:
 
 ```bash
-memvault ui                                   # API only; point your frontend at it
-memvault ui --static ../memvault-ui/dist      # also serve a built frontend at http://127.0.0.1:8765
+memvault import ~/Downloads/conversations.json
 ```
 
-| method | path | |
-|---|---|---|
-| GET | `/api/health` | status and embedding model |
-| GET | `/api/conversations?limit=&tag=&source=` | list with snippets |
-| GET | `/api/conversations/{id}` | full conversation |
-| PATCH | `/api/conversations/{id}` | `{title?, tags?}` |
-| DELETE | `/api/conversations/{id}` | |
-| GET | `/api/search?q=&k=` | hybrid search |
-| GET | `/api/tags` | `[{tag, count}]` |
-| POST | `/api/notes` | `{title, content, tags}` |
+Running it again later only adds what's new.
 
-CORS allows `localhost:5173`/`8080` (Vite dev servers) and Lovable preview domains. Add others with `--origin https://example.com` or `MEMVAULT_CORS_ORIGINS`.
+## Update
+
+```bash
+cd ~/code/memvault && git pull && pip install -e .
+cd ~/code/memvault-ui && git pull && bun install
+```
+
+Then restart `memvault ui` (the UI dev server reloads by itself). Existing databases are migrated automatically.
 
 ## CLI
 
 ```bash
-memvault import ~/Downloads/conversations.json --tag archive   # Claude or ChatGPT export
-memvault search "sourdough hydration"
-memvault list --tag recipes
-memvault show <id>
-memvault chat                   # local model + retrieval; /save inside to keep the session
-memvault reembed                # after switching embedding models
+memvault search "sourdough"        memvault list [--tag x] [--archived]
+memvault show <id>                 memvault archive <id> [--undo]
+memvault delete <id>               memvault reembed   # after changing embedding model
 ```
 
-## Configuration
+## Your data
 
-| env var | default | |
-|---|---|---|
-| `MEMVAULT_DB` | `~/.memvault/vault.db` | database path |
-| `MEMVAULT_EMBEDDER` | `ollama` | `ollama` or `none` |
-| `MEMVAULT_EMBED_MODEL` | `nomic-embed-text` | any Ollama embedding model |
-| `OLLAMA_HOST` | `http://localhost:11434` | |
-| `MEMVAULT_CHAT_URL` | `http://localhost:11434/v1` | any OpenAI-compatible endpoint |
-| `MEMVAULT_CHAT_MODEL` | `qwen3:8b` | |
-| `MEMVAULT_CHAT_KEY` | | API key if the endpoint needs one |
-
-## Schema
-
-```sql
-conversations(id, title, source, tags, created_at, saved_at)
-messages(conversation_id, position, role, content, created_at)
-chunks(conversation_id, text, embedding BLOB, model)   -- + chunks_fts (FTS5 trigram)
-```
-
-It's plain SQLite, so you can query it directly: `sqlite3 ~/.memvault/vault.db`.
+Everything is in `~/.memvault/vault.db` (change with `MEMVAULT_DB`). It's plain SQLite: back it up by copying the file. The API only listens on `127.0.0.1`.
 
 ## Development
 
 ```bash
-pip install -e ".[dev]"
-pytest
-ruff check .
+pip install -e ".[dev]" && pytest && ruff check .
 ```
 
-## Roadmap
-
-- [ ] `sqlite-vec` index for large vaults (current brute-force cosine is fine to ~100k chunks)
-- [x] Local REST API for a web UI
-- [ ] Web UI (browse, tag, edit)
-- [ ] Auto-summaries and topic clustering
-- [ ] Encrypted vault option
-
-## License
-
-MIT
+MIT License
