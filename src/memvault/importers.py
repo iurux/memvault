@@ -46,6 +46,7 @@ def claude_export(data: list) -> Iterator[Conversation]:
                 messages=msgs,
                 title=c.get("name") or "",
                 source="claude",
+                tags=list(c.get("tags") or []),
                 id=f"claude-{c['uuid']}",
                 created_at=_ts(c.get("created_at")) or msgs[0].created_at or "",
             )
