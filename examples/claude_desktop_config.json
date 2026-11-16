@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "memvault": {
+      "command": "memvault",
+      "args": ["serve"],
+      "env": {
+        "MEMVAULT_DB": "~/.memvault/vault.db",
+        "MEMVAULT_EMBEDDER": "ollama"
+      }
+    }
+  }
+}
