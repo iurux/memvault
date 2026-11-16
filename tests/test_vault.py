@@ -36,25 +36,25 @@ def conv(title, *pairs, **kw):
 
 
 def test_save_get_roundtrip(vault):
-    c = conv("OPT timeline", ("when will my EAD arrive", "usually 2-5 days after production"), tags=["opt"])
+    c = conv("Bread", ("how long to proof sourdough", "usually 4-12 hours"), tags=["baking"])
     vault.save(c)
     got = vault.get(c.id)
-    assert got.title == "OPT timeline"
-    assert got.tags == ["opt"]
+    assert got.title == "Bread"
+    assert got.tags == ["baking"]
     assert [m.role for m in got.messages] == ["user", "assistant"]
 
 
 def test_keyword_search(vault):
-    vault.save(conv("Europe", ("plan a Switzerland trip", "Zermatt and Lucerne")))
+    vault.save(conv("Hiking", ("plan a mountain hike", "Rainier and Olympic trails")))
     vault.save(conv("Cooking", ("how to make ramen broth", "simmer pork bones")))
-    hits = vault.search("Lucerne")
-    assert hits and hits[0].title == "Europe"
+    hits = vault.search("Olympic")
+    assert hits and hits[0].title == "Hiking"
 
 
 def test_short_cjk_terms(vault):
-    vault.save(conv("签证", ("法国签证要多久", "大约两周")))
+    vault.save(conv("饺子", ("饺子馅怎么调", "白菜猪肉")))
     vault.save(conv("other", ("hello", "world")))
-    assert vault.search("签证")[0].title == "签证"
+    assert vault.search("饺子")[0].title == "饺子"
 
 
 def test_search_without_embedder(tmp_path):
@@ -125,14 +125,14 @@ def test_cli_import_and_search(tmp_path, capsys, monkeypatch):
     export = tmp_path / "conversations.json"
     export.write_text(
         json.dumps(
-            [{"uuid": "u1", "name": "Spokane bio", "chat_messages": [
-                {"sender": "human", "text": "biometrics appointment in Spokane"},
-                {"sender": "assistant", "text": "arrive 15 minutes early"},
+            [{"uuid": "u1", "name": "Garden notes", "chat_messages": [
+                {"sender": "human", "text": "planting tomatoes in spring"},
+                {"sender": "assistant", "text": "full sun, water daily"},
             ]}]
         )
     )
     db = str(tmp_path / "cli.db")
     main(["--db", db, "import", str(export)])
-    main(["--db", db, "search", "Spokane"])
+    main(["--db", db, "search", "tomatoes"])
     out = capsys.readouterr().out
-    assert "imported 1" in out and "Spokane bio" in out
+    assert "imported 1" in out and "Garden notes" in out

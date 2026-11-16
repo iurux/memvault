@@ -33,7 +33,7 @@ def save_conversation(title: str, messages: list[dict], tags: list[str] | None =
     """Save a conversation (or an excerpt) to the local vault.
 
     messages: list of {"role": "user"|"assistant", "content": "..."} in order.
-    tags: optional labels, e.g. ["opt", "visa"].
+    tags: optional labels, e.g. ["work", "recipes"].
     """
     conv = Conversation(
         messages=[Message(m.get("role", "user"), m.get("content", "")) for m in messages],

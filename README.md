@@ -48,7 +48,7 @@ Add this to `claude_desktop_config.json` (see [`examples/`](examples/claude_desk
 
 Tools exposed: `save_conversation`, `save_note`, `search_memory`, `get_conversation`, `list_conversations`.
 
-Then just talk: *"save this conversation to memvault, tag it opt"* or *"search my vault for the Spokane biometrics plan"*.
+Then just talk: *"save this conversation to memvault, tag it recipes"* or *"search my vault for that sourdough discussion"*.
 
 ## Web UI
 
@@ -76,8 +76,8 @@ CORS allows `localhost:5173`/`8080` (Vite dev servers) and Lovable preview domai
 
 ```bash
 memvault import ~/Downloads/conversations.json --tag archive   # Claude or ChatGPT export
-memvault search "biometrics reschedule"
-memvault list --tag opt
+memvault search "sourdough hydration"
+memvault list --tag recipes
 memvault show <id>
 memvault chat                   # local model + retrieval; /save inside to keep the session
 memvault reembed                # after switching embedding models

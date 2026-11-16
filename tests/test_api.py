@@ -9,10 +9,10 @@ from memvault.api import create_app
 def client(tmp_path):
     v = Vault(tmp_path / "api.db")
     v.save(Conversation(
-        messages=[Message("user", "OPT 时间线 Spokane bio"), Message("assistant", "大约 30 个工作日")],
-        title="OPT", tags=["opt", "visa"], id="c1",
+        messages=[Message("user", "番茄炒蛋 recipe sourdough"), Message("assistant", "先炒蛋再炒番茄")],
+        title="Cooking", tags=["food", "recipes"], id="c1",
     ))
-    v.save(Conversation(messages=[Message("user", "Zermatt in winter")], title="Swiss", tags=["travel"], id="c2"))
+    v.save(Conversation(messages=[Message("user", "TCP congestion control")], title="Networking", tags=["cs"], id="c2"))
     (tmp_path / "dist").mkdir()
     (tmp_path / "dist" / "index.html").write_text("<html>ui</html>")
     return TestClient(create_app(v, static_dir=tmp_path / "dist"))
@@ -22,18 +22,18 @@ def test_list_and_filter(client):
     r = client.get("/api/conversations")
     assert r.status_code == 200 and {c["id"] for c in r.json()} == {"c1", "c2"}
     assert r.json()[0]["snippet"]
-    assert [c["id"] for c in client.get("/api/conversations?tag=travel").json()] == ["c2"]
+    assert [c["id"] for c in client.get("/api/conversations?tag=cs").json()] == ["c2"]
 
 
 def test_get_and_404(client):
     r = client.get("/api/conversations/c1").json()
-    assert r["tags"] == ["opt", "visa"] and r["messages"][1]["role"] == "assistant"
+    assert r["tags"] == ["food", "recipes"] and r["messages"][1]["role"] == "assistant"
     assert client.get("/api/conversations/nope").status_code == 404
 
 
 def test_patch(client):
-    r = client.patch("/api/conversations/c1", json={"title": "OPT 2026", "tags": ["opt"]})
-    assert r.status_code == 200 and r.json()["title"] == "OPT 2026" and r.json()["tags"] == ["opt"]
+    r = client.patch("/api/conversations/c1", json={"title": "Cooking 2", "tags": ["food"]})
+    assert r.status_code == 200 and r.json()["title"] == "Cooking 2" and r.json()["tags"] == ["food"]
     assert client.patch("/api/conversations/c1", json={"tags": "bad"}).status_code == 400
     assert client.patch("/api/conversations/x", json={"title": "y"}).status_code == 404
 
@@ -44,10 +44,10 @@ def test_delete(client):
 
 
 def test_search_and_tags(client):
-    assert client.get("/api/search", params={"q": "Spokane"}).json()[0]["conversation_id"] == "c1"
-    assert client.get("/api/search", params={"q": "时间"}).json()[0]["conversation_id"] == "c1"
+    assert client.get("/api/search", params={"q": "sourdough"}).json()[0]["conversation_id"] == "c1"
+    assert client.get("/api/search", params={"q": "番茄"}).json()[0]["conversation_id"] == "c1"
     assert client.get("/api/search?q=").json() == []
-    assert {"tag": "opt", "count": 1} in client.get("/api/tags").json()
+    assert {"tag": "food", "count": 1} in client.get("/api/tags").json()
 
 
 def test_create_note(client):
