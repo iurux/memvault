@@ -112,6 +112,15 @@ class Vault:
             cur = self.conn.execute("DELETE FROM conversations WHERE id=?", (conversation_id,))
         return cur.rowcount > 0
 
+    def set_messages(self, conversation_id: str, messages: list[Message]) -> bool:
+        """Replace a conversation's messages (edit, add, remove, reorder). Re-indexes search."""
+        conv = self.get(conversation_id)
+        if not conv:
+            return False
+        conv.messages = messages
+        self.save(conv)
+        return True
+
     def archive(self, conversation_id: str, archived: bool = True) -> bool:
         with self.conn:
             cur = self.conn.execute(

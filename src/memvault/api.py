@@ -92,6 +92,13 @@ def create_app(
         except ValueError:
             return _err(400, "invalid JSON")
         title, tags, archived = body.get("title"), body.get("tags"), body.get("archived")
+        messages = body.get("messages")
+        valid_messages = isinstance(messages, list) and all(
+            isinstance(m, dict) and isinstance(m.get("role"), str) and isinstance(m.get("content"), str)
+            for m in messages
+        )
+        if messages is not None and not valid_messages:
+            return _err(400, "messages must be a list of {role, content} strings")
         if archived is not None and not isinstance(archived, bool):
             return _err(400, "archived must be a boolean")
         if title is not None and not isinstance(title, str):
@@ -103,6 +110,10 @@ def create_app(
             return _err(404, "not found")
         if archived is not None:
             vault.archive(cid, archived)
+        if messages is not None:
+            vault.set_messages(
+                cid, [Message(m["role"], m["content"], m.get("created_at")) for m in messages if m["content"].strip()]
+            )
         return await get_conversation(request)
 
     async def delete_conversation(request: Request):

@@ -80,3 +80,24 @@ def test_archive_flow(client):
     assert client.get("/api/search", params={"q": "congestion", "include_archived": "true"}).json()
     assert client.patch("/api/conversations/c2", json={"archived": "yes"}).status_code == 400
     assert client.patch("/api/conversations/c2", json={"archived": False}).json()["archived"] is False
+
+
+def test_edit_messages_reindexes_search(client):
+    r = client.patch("/api/conversations/c1", json={"messages": [
+        {"role": "user", "content": "how to make dumplings"},
+        {"role": "assistant", "content": "pork and cabbage filling"},
+        {"role": "note", "content": "   "},
+    ]})
+    assert r.status_code == 200
+    msgs = r.json()["messages"]
+    assert [m["content"] for m in msgs] == ["how to make dumplings", "pork and cabbage filling"]
+    assert r.json()["tags"] == ["food", "recipes"]  # metadata kept
+    assert client.get("/api/search", params={"q": "dumplings"}).json()[0]["conversation_id"] == "c1"
+    assert client.get("/api/search", params={"q": "sourdough"}).json() == []
+    assert client.patch("/api/conversations/c1", json={"messages": [{"role": "user"}]}).status_code == 400
+
+
+def test_edit_keeps_archived(client):
+    client.patch("/api/conversations/c1", json={"archived": True})
+    r = client.patch("/api/conversations/c1", json={"messages": [{"role": "user", "content": "edited"}]})
+    assert r.json()["archived"] is True
